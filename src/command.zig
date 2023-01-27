@@ -18,14 +18,14 @@ const Command = struct {
             self.use_otf = true;
             return;
         }
-        return Error.InvalidOption;
+        return Error.InvalidInstallOption;
     }
 };
 
-// TODO: Add new errors for fatals with extra info
 const Error = error{
-    InvalidInstall,
-    InvalidOption,
+    InvalidUsage,
+    InvalidInstallOption,
+    InvalidInstallCommand,
 };
 
 const Option = union(enum) {
@@ -41,7 +41,7 @@ const Option = union(enum) {
             return Option{ .install_zip = value };
         if (mem.eql(u8, arg, "--from-zip") or mem.eql(u8, arg, "-z"))
             return Option{ .install_zip = value };
-        return Error.InvalidInstall;
+        return Error.InvalidInstallCommand;
     }
 };
 
@@ -64,14 +64,13 @@ const invalid =
 ;
 
 // Used as the public Api to run and allow testing on parse
-// TODO: Catch the error when parse is returning better errors and write it to the stdout
 pub fn run(allocator: mem.Allocator) !Command {
-    const args = try process.argsAlloc(allocator);
+    // TODO: switch the error to print different messages for each invalid message.
+    const args = process.argsAlloc(allocator) catch fatal(invalid);
     return parse(allocator, args);
 }
 
-// TODO: Return errors with info instead of finishing the program for better testing
-fn parse(allocator: std.mem.Allocator, args: []const [:0]u8) !Command {
+fn parse(allocator: std.mem.Allocator, args: [][:0]u8) !Command {
     defer process.argsFree(allocator, args);
     const len = args.len;
     if (len <= 1)
@@ -82,22 +81,22 @@ fn parse(allocator: std.mem.Allocator, args: []const [:0]u8) !Command {
         try exit(help);
     if (std.mem.eql(u8, sub_command, "install")) {
         if (len < 4)
-            fatal(invalid);
-        const option = Option.formArgs(args[2], args[3]) catch fatal(invalid);
+            return Error.InvalidUsage;
+        const option = try Option.formArgs(args[2], args[3]);
         var command = Command{ .option = option };
         const options = args[4..];
         for (options) |opt| {
-            command.setOpt(opt) catch fatal(invalid);
+            try command.setOpt(opt);
         }
         return command;
     }
     if (std.mem.eql(u8, sub_command, "uninstall")) {
         if (len != 3)
-            fatal(invalid);
+            return Error.InvalidUsage;
         const path = args[2];
         return Command{ .option = Option{ .uninstall = path } };
     }
-    fatal(invalid);
+    return Error.InvalidUsage;
 }
 
 pub fn fatal(msg: []const u8) noreturn {
@@ -108,14 +107,3 @@ pub fn exit(msg: []const u8) !void {
     try io.getStdOut().writeAll(msg);
     process.exit(0);
 }
-
-const test_allocator = std.testing.allocator;
-
-// test "test parse invalid" {
-//     const args = [1].{"font-manager"};
-//     std.testing.expectError(expected_error: anyerror, actual_error_union: anytype)
-//     const command = try parse(test_allocator, args);
-// }
-
-test "test parse install" {}
-test "test parse uninstall" {}
