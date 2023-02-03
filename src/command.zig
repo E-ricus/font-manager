@@ -22,6 +22,32 @@ const invalid =
     \\ for more info try --help
 ;
 
+fn Iterator(comptime T: type) type {
+    return struct {
+        inner: T,
+
+        const Self = @This();
+
+        fn init(inner: T) Self {
+            return .{ .inner = inner };
+        }
+
+        // Returns true if there is something to get next.
+        // Not that generic, but probably enough, assumes inner to control with index and count.
+        fn hasNext(self: *Self) bool {
+            if (self.inner.index + 1 <= self.inner.count) return true;
+
+            return false;
+        }
+        fn next(self: *Self) ?([]const u8) {
+            return self.inner.next();
+        }
+        fn skip(self: *Self) bool {
+            return self.inner.skip();
+        }
+    };
+}
+
 const Command = struct {
     option: Option,
     interactive: bool = false,
@@ -67,32 +93,33 @@ const Option = union(enum) {
 // Used as the public Api to run and allow testing on parse
 pub fn run(allocator: mem.Allocator) Command {
     // TODO: switch the error to print different messages for each invalid message.
-    var iter = try process.argsWithAllocator(allocator);
-    defer iter.deinit();
+    var arg_iter = try process.argsWithAllocator(allocator);
+    defer arg_iter.deinit();
+    var iter = Iterator(@TypeOf(arg_iter.inner)).init(arg_iter.inner);
     const command = parse(iter) catch fatal(invalid);
     return command;
 }
 
-fn parse(iter: anytype) !Command {
-    var args_iter = iter;
+fn parse(args_iter: anytype) !Command {
+    // Drops the const
+    var iter = args_iter;
     // ignore executable
-    _ = args_iter.skip();
-    const len = args_iter.inner.count;
-    var sub_command = args_iter.next() orelse return Error.InvalidUsage;
-    if (len == 2 and (std.mem.eql(u8, sub_command, "--help") or std.mem.eql(u8, sub_command, "-h")))
+    _ = iter.skip();
+    var sub_command = iter.next() orelse return Error.InvalidUsage;
+    if ((std.mem.eql(u8, sub_command, "--help") or std.mem.eql(u8, sub_command, "-h")) and iter.hasNext())
         try exit(help);
     if (std.mem.eql(u8, sub_command, "install")) {
-        const arg = args_iter.next() orelse return Error.InvalidUsage;
-        const value = args_iter.next() orelse return Error.InvalidUsage;
+        const arg = iter.next() orelse return Error.InvalidUsage;
+        const value = iter.next() orelse return Error.InvalidUsage;
         const option = try Option.formArgs(arg, value);
         var command = Command{ .option = option };
-        while (args_iter.next()) |opt| {
+        while (iter.next()) |opt| {
             try command.setOpt(opt);
         }
         return command;
     }
     if (std.mem.eql(u8, sub_command, "uninstall")) {
-        const path = args_iter.next() orelse return Error.InvalidUsage;
+        const path = iter.next() orelse return Error.InvalidUsage;
         return Command{ .option = Option{ .uninstall = path } };
     }
     return Error.InvalidUsage;
@@ -109,9 +136,8 @@ fn fatal(msg: []const u8) noreturn {
 }
 
 // For testing
-const Inner = struct {
+const InnerTest = struct {
     const Self = @This();
-    // argsv: [][:0]u8,
     argsv: [][]const u8 = undefined,
     index: usize = 0,
     count: usize = 0,
@@ -137,18 +163,9 @@ const Inner = struct {
         return true;
     }
 };
-const Iter = struct {
-    inner: Inner,
-    fn next(self: *@This()) ?([]const u8) {
-        return self.inner.next();
-    }
-    fn skip(self: *@This()) bool {
-        return self.inner.skip();
-    }
-};
 
 test "parse invalid" {
-    var iter = Iter{ .inner = Inner{} };
+    var iter = Iterator(InnerTest).init(InnerTest{});
     var args = [_][]const u8{ "font-manager", "invalid" };
     iter.inner.set(&args);
     try std.testing.expectError(Error.InvalidUsage, parse(iter));
@@ -167,7 +184,7 @@ test "parse invalid" {
 }
 
 test "parse command" {
-    var iter = Iter{ .inner = Inner{} };
+    var iter = Iterator(InnerTest).init(InnerTest{});
     var args = [_][]const u8{ "font-manager", "install", "-n", "FiraCode" };
     iter.inner.set(&args);
     var command = try parse(iter);
@@ -187,14 +204,14 @@ test "parse command" {
 }
 
 test "parse invalid install" {
-    var iter = Iter{ .inner = Inner{} };
+    var iter = Iterator(InnerTest).init(InnerTest{});
     var args = [_][]const u8{ "font-manager", "install", "-n", "FiraCode", "-a" };
     iter.inner.set(&args);
     try std.testing.expectError(Error.InvalidInstallOption, parse(iter));
 }
 
 test "parse install option" {
-    var iter = Iter{ .inner = Inner{} };
+    var iter = Iterator(InnerTest).init(InnerTest{});
     var args = [_][]const u8{ "font-manager", "install", "-n", "FiraCode", "-i" };
     iter.inner.set(&args);
     var command = try parse(iter);
