@@ -95,14 +95,13 @@ pub fn run(allocator: mem.Allocator) Command {
     // TODO: switch the error to print different messages for each invalid message.
     var arg_iter = try process.argsWithAllocator(allocator);
     defer arg_iter.deinit();
-    var iter = Iterator(@TypeOf(arg_iter.inner)).init(arg_iter.inner);
-    const command = parse(iter) catch fatal(invalid);
+    const iter_type = @TypeOf(arg_iter.inner);
+    var iter = Iterator(iter_type).init(arg_iter.inner);
+    const command = parse(iter_type, &iter) catch fatal(invalid);
     return command;
 }
 
-fn parse(args_iter: anytype) !Command {
-    // Drops the const
-    var iter = args_iter;
+fn parse(comptime T: type, iter: *Iterator(T)) !Command {
     // ignore executable
     _ = iter.skip();
     var sub_command = iter.next() orelse return Error.InvalidUsage;
@@ -168,38 +167,38 @@ test "parse invalid" {
     var iter = Iterator(InnerTest).init(InnerTest{});
     var args = [_][]const u8{ "font-manager", "invalid" };
     iter.inner.set(&args);
-    try std.testing.expectError(Error.InvalidUsage, parse(iter));
+    try std.testing.expectError(Error.InvalidUsage, parse(InnerTest, &iter));
     args = [_][]const u8{ "font-manager", "install" };
     iter.inner.set(&args);
-    try std.testing.expectError(Error.InvalidUsage, parse(iter));
+    try std.testing.expectError(Error.InvalidUsage, parse(InnerTest, &iter));
     args = [_][]const u8{ "font-manager", "uninstall" };
     iter.inner.set(&args);
-    try std.testing.expectError(Error.InvalidUsage, parse(iter));
+    try std.testing.expectError(Error.InvalidUsage, parse(InnerTest, &iter));
     var args2 = [_][]const u8{ "font-manager", "install", "-h" };
     iter.inner.set(&args2);
-    try std.testing.expectError(Error.InvalidUsage, parse(iter));
+    try std.testing.expectError(Error.InvalidUsage, parse(InnerTest, &iter));
     args2 = [_][]const u8{ "font-manager", "install", "-n" };
     iter.inner.set(&args2);
-    try std.testing.expectError(Error.InvalidUsage, parse(iter));
+    try std.testing.expectError(Error.InvalidUsage, parse(InnerTest, &iter));
 }
 
 test "parse command" {
     var iter = Iterator(InnerTest).init(InnerTest{});
     var args = [_][]const u8{ "font-manager", "install", "-n", "FiraCode" };
     iter.inner.set(&args);
-    var command = try parse(iter);
+    var command = try parse(InnerTest, &iter);
     try std.testing.expect(std.meta.eql(command.option, Option{ .install_nerd = "FiraCode" }));
     args = [_][]const u8{ "font-manager", "install", "-z", "./font.zip" };
     iter.inner.set(&args);
-    command = try parse(iter);
+    command = try parse(InnerTest, &iter);
     try std.testing.expect(std.meta.eql(command.option, Option{ .install_zip = "./font.zip" }));
     args = [_][]const u8{ "font-manager", "install", "-u", "https://download.zip" };
     iter.inner.set(&args);
-    command = try parse(iter);
+    command = try parse(InnerTest, &iter);
     try std.testing.expect(std.meta.eql(command.option, Option{ .install_url = "https://download.zip" }));
     var args2 = [_][]const u8{ "font-manager", "uninstall", "FiraCode" };
     iter.inner.set(&args2);
-    command = try parse(iter);
+    command = try parse(InnerTest, &iter);
     try std.testing.expect(std.meta.eql(command.option, Option{ .uninstall = "FiraCode" }));
 }
 
@@ -207,22 +206,22 @@ test "parse invalid install" {
     var iter = Iterator(InnerTest).init(InnerTest{});
     var args = [_][]const u8{ "font-manager", "install", "-n", "FiraCode", "-a" };
     iter.inner.set(&args);
-    try std.testing.expectError(Error.InvalidInstallOption, parse(iter));
+    try std.testing.expectError(Error.InvalidInstallOption, parse(InnerTest, &iter));
 }
 
 test "parse install option" {
     var iter = Iterator(InnerTest).init(InnerTest{});
     var args = [_][]const u8{ "font-manager", "install", "-n", "FiraCode", "-i" };
     iter.inner.set(&args);
-    var command = try parse(iter);
+    var command = try parse(InnerTest, &iter);
     const option = Option{ .install_nerd = "FiraCode" };
     try std.testing.expect(std.meta.eql(command, Command{ .option = option, .interactive = true, .use_otf = false }));
     args = [_][]const u8{ "font-manager", "install", "-n", "FiraCode", "--use-otf" };
     iter.inner.set(&args);
-    command = try parse(iter);
+    command = try parse(InnerTest, &iter);
     try std.testing.expect(std.meta.eql(command, Command{ .option = option, .interactive = false, .use_otf = true }));
     var args2 = [_][]const u8{ "font-manager", "install", "-n", "FiraCode", "--use-otf", "-i" };
     iter.inner.set(&args2);
-    command = try parse(iter);
+    command = try parse(InnerTest, &iter);
     try std.testing.expect(std.meta.eql(command, Command{ .option = option, .interactive = true, .use_otf = true }));
 }
