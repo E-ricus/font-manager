@@ -10,7 +10,7 @@ pub fn main() !void {
     arena_instance.deinit();
     const gpa = arena_instance.allocator();
 
-    _ = command.run(gpa);
+    _ = try command.run(gpa);
 
     // var cp = std.ChildProcess.init(&[_][]const u8{ "wget", s }, gpa);
     // const term = try cp.spawnAndWait();

@@ -9,10 +9,13 @@ const help =
     \\  Commands:
     \\      install [option] [name]      Installs a font.
     \\      uninstall                    Uninstalls the given font if is already installed.
-    \\  Install options:
+    \\  Install options (modes):
     \\      -n, --nerd [name]            Installs the given font from the nerd aggregator. --nerd option is mutually exclusive with --from-zip and --from-url
     \\      -z, --from-zip [path]        Installs the font contained in the zip located in the given path. --from-zip is mutually exclusive with --nerd and --from-url
     \\      -u, --from-url [url]         Downloads and installs the font with the given url. --from-url is mutually exclusive with --nerd and --from-zip
+    \\  Install options (optionals):
+    \\      -i, --interactive            Asks for confirmation from the user for each file.
+    \\          --use-otf                Indicates if should ignore .ttf and use .otf version
     \\  General options:
     \\      -h, --help                   Display help information.
 ;
@@ -21,6 +24,41 @@ const invalid =
     \\ Usage: font-manager [command] [options]
     \\ for more info try --help
 ;
+
+const invalid_command =
+    \\ The install subcommand needs one valid option
+    \\ Usage: font-manager [command] [options]
+    \\  Install options (modes):
+    \\      -n, --nerd [name]            Installs the given font from the nerd aggregator. --nerd option is mutually exclusive with --from-zip and --from-url
+    \\      -z, --from-zip [path]        Installs the font contained in the zip located in the given path. --from-zip is mutually exclusive with --nerd and --from-url
+    \\      -u, --from-url [url]         Downloads and installs the font with the given url. --from-url is mutually exclusive with --nerd and --from-zip
+    \\ for more info try --help
+;
+const invalid_option =
+    \\ Invalid option for install
+    \\ Usage: font-manager [command] [options]
+    \\  Install options (optionals):
+    \\      -i, --interactive            Asks for confirmation from the user for each file.
+    \\          --use-otf                Indicates if should ignore .ttf and use .otf version
+    \\ for more info try --help
+;
+
+// Used as the public Api to run and allow testing on parse
+pub fn run(allocator: mem.Allocator) !Command {
+    var arg_iter = try process.argsWithAllocator(allocator);
+    defer arg_iter.deinit();
+    const iter_type = @TypeOf(arg_iter.inner);
+    var iter = Iterator(iter_type).init(arg_iter.inner);
+    const command = parse(iter_type, &iter) catch |err| {
+        switch (err) {
+            Error.InvalidUsage => fatal(invalid),
+            Error.InvalidInstallCommand => fatal(invalid_command),
+            Error.InvalidInstallOption => fatal(invalid_option),
+            else => unreachable,
+        }
+    };
+    return command;
+}
 
 fn Iterator(comptime T: type) type {
     return struct {
@@ -89,17 +127,6 @@ const Option = union(enum) {
         return Error.InvalidInstallCommand;
     }
 };
-
-// Used as the public Api to run and allow testing on parse
-pub fn run(allocator: mem.Allocator) Command {
-    // TODO: switch the error to print different messages for each invalid message.
-    var arg_iter = try process.argsWithAllocator(allocator);
-    defer arg_iter.deinit();
-    const iter_type = @TypeOf(arg_iter.inner);
-    var iter = Iterator(iter_type).init(arg_iter.inner);
-    const command = parse(iter_type, &iter) catch fatal(invalid);
-    return command;
-}
 
 fn parse(comptime T: type, iter: *Iterator(T)) !Command {
     // ignore executable

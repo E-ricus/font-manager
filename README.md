@@ -2,6 +2,8 @@
 A simple CLI to manage fonts on Linux
 
 ## WIP!!
+Not usable yet
+Rewrite of my [font-manager-cli](https://github.com/E-ricus/font-manager-cli) to learn zig.
 
 ## About
 This utility simplifies managing fonts inside of the terminal.
