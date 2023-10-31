@@ -11,7 +11,7 @@ pub fn install_zip(allocator: mem.Allocator, path: []const u8) !void {
     _ = path;
     _ = allocator;
 }
-pub fn install_url(allocator: mem.allocator, url: []const u8) !void {
+pub fn install_url(allocator: mem.Allocator, url: []const u8) !void {
     _ = url;
     _ = allocator;
 }

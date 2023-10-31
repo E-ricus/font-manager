@@ -8,6 +8,10 @@ const io = std.io;
 const mem = std.mem;
 const process = std.process;
 
+const Err = error{
+    Unimplemented,
+};
+
 pub fn main() !void {
     var arena_instance = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     arena_instance.deinit();
@@ -29,6 +33,7 @@ fn run(gpa: mem.Allocator) !void {
         .install_nerd => |name| try manager.install_nerd(gpa, name),
         .install_url => |url| try manager.install_url(gpa, url),
         .install_zip => |path| try manager.install_zip(gpa, path),
+        .uninstall => |_| return Err.Unimplemented,
     }
 }
 test {
